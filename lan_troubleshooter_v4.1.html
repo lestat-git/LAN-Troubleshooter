@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LAN Troubleshooter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg:      #0a0e1a;
+    --surface: #111827;
+    --surface2:#1a2235;
+    --border:  #1e2d45;
+    --accent:  #00d4ff;
+    --accent2: #0077ff;
+    --success: #00e5a0;
+    --warn:    #ffb300;
+    --danger:  #ff4757;
+    --text:    #e2e8f0;
+    --muted:   #64748b;
+    --mono:    'JetBrains Mono', monospace;
+    --sans:    'Syne', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 2rem; }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    row-gap: 0.75rem;
+  }
+  .logo {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem;
+    box-shadow: 0 0 20px rgba(0,212,255,0.3);
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+  header h1 span { color: var(--accent); }
+  .version-badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+  }
+
+  /* ── DB PANEL ── */
+  .db-panel {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .db-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 0.35rem 0.8rem;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    min-width: 240px;
+    transition: border-color 0.3s, color 0.3s;
+  }
+  .db-badge.ok    { border-color: rgba(0,229,160,0.35); color: var(--success); }
+  .db-badge.warn  { border-color: rgba(255,179,0,0.35); color: var(--warn); }
+  .db-badge.error { border-color: rgba(255,71,87,0.35); color: var(--danger); }
+  .db-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  .db-badge.ok    .db-dot { background: var(--success); box-shadow: 0 0 6px var(--success); }
+  .db-badge.warn  .db-dot { background: var(--warn);    box-shadow: 0 0 6px var(--warn); }
+  .db-badge.error .db-dot { background: var(--danger);  box-shadow: 0 0 6px var(--danger); }
+
+  .db-badge-inner { flex: 1; }
+  .db-progress {
+    display: none;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 5px;
+    overflow: hidden;
+  }
+  .db-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.25s;
+  }
+
+  .db-actions { display: flex; gap: 0.35rem; }
+  .btn-db {
+    display: flex; align-items: center; gap: 0.3rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .btn-db:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-db.accent {
+    background: rgba(0,119,255,0.12);
+    border-color: rgba(0,119,255,0.4);
+    color: #60a5fa;
+  }
+  .btn-db.accent:hover { background: rgba(0,119,255,0.22); border-color: var(--accent); color: var(--accent); }
+  .btn-db:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── NO-DB BANNER ── */
+  .no-db-banner {
+    display: none;
+    background: rgba(255,179,0,0.06);
+    border: 1px solid rgba(255,179,0,0.25);
+    border-radius: 10px;
+    padding: 1.2rem 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .no-db-banner h3 { color: var(--warn); font-size: 0.88rem; margin-bottom: 0.45rem; }
+  .no-db-banner p  { color: var(--muted); font-size: 0.78rem; line-height: 1.7; font-family: var(--mono); }
+  .banner-btns { display: flex; gap: 0.5rem; margin-top: 0.85rem; flex-wrap: wrap; }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.3rem;
+    width: fit-content;
+  }
+  .tab {
+    padding: 0.5rem 1.2rem;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .tab.active {
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    color: #fff;
+    box-shadow: 0 2px 12px rgba(0,212,255,0.25);
+  }
+  .tab-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.6; }
+
+  /* ── PANELS ── */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .input-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+    transition: border-color 0.2s;
+  }
+  .input-section:focus-within { border-color: var(--accent); }
+  .input-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+  .input-label {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .detected-badge {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    background: rgba(0,229,160,0.15);
+    color: var(--success);
+    border: 1px solid rgba(0,229,160,0.3);
+    display: none;
+  }
+  .clear-btn {
+    background: none; border: none;
+    color: var(--muted); cursor: pointer;
+    font-size: 0.75rem; font-family: var(--mono);
+    padding: 0.2rem 0.5rem; border-radius: 4px;
+    transition: color 0.2s;
+  }
+  .clear-btn:hover { color: var(--danger); }
+  textarea {
+    width: 100%; min-height: 160px;
+    background: transparent; border: none;
+    color: var(--text); font-family: var(--mono);
+    font-size: 0.78rem; line-height: 1.6;
+    padding: 1rem; resize: vertical; outline: none;
+  }
+  textarea::placeholder { color: var(--muted); opacity: 0.5; }
+
+  /* ── ACTIONS ── */
+  .actions {
+    display: flex; gap: 0.75rem;
+    flex-wrap: wrap; align-items: center;
+    margin-bottom: 2rem;
+  }
+  .btn {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.65rem 1.4rem;
+    border-radius: 8px; border: none;
+    font-family: var(--sans); font-size: 0.85rem; font-weight: 700;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    color: #fff; box-shadow: 0 4px 15px rgba(0,119,255,0.3);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,119,255,0.4); }
+  .btn-secondary {
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-success {
+    background: rgba(0,229,160,0.1); color: var(--success);
+    border: 1px solid rgba(0,229,160,0.3);
+  }
+  .btn-success:hover { background: rgba(0,229,160,0.2); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+  .stats-bar { margin-left: auto; display: flex; gap: 1rem; align-items: center; }
+  .stat { font-size: 0.78rem; color: var(--muted); font-family: var(--mono); }
+  .stat strong { color: var(--accent); }
+
+  /* ── FILTERS ── */
+  .filters {
+    display: flex; gap: 0.75rem;
+    flex-wrap: wrap; margin-bottom: 1rem; align-items: center;
+  }
+  .filter-input {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 7px; color: var(--text);
+    font-family: var(--mono); font-size: 0.8rem;
+    padding: 0.45rem 0.85rem; outline: none; min-width: 180px;
+    transition: border-color 0.2s;
+  }
+  .filter-input:focus { border-color: var(--accent); }
+  .filter-input::placeholder { color: var(--muted); opacity: 0.6; }
+  .filter-label { font-size: 0.75rem; color: var(--muted); font-weight: 600; }
+
+  /* ── TABLE ── */
+  .table-wrapper {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+  }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  thead tr { background: var(--surface2); border-bottom: 2px solid var(--border); }
+  th {
+    padding: 0.85rem 1rem; text-align: left;
+    font-family: var(--mono); font-size: 0.7rem; font-weight: 600;
+    color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase;
+    white-space: nowrap; cursor: pointer; user-select: none; transition: color 0.2s;
+  }
+  th:hover { color: #fff; }
+  th .sort-icon { margin-left: 0.3rem; opacity: 0.4; }
+  th.sorted .sort-icon { opacity: 1; }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  td {
+    padding: 0.75rem 1rem; font-family: var(--mono);
+    font-size: 0.78rem; white-space: nowrap; color: var(--text);
+  }
+  .td-vlan  { color: var(--warn); font-weight: 600; }
+  .td-mac   { color: #a5b4fc; letter-spacing: 0.05em; }
+  .td-port  { color: var(--success); }
+  .td-type-dynamic { color: var(--muted); font-size: 0.7rem; }
+  .td-type-static  { color: var(--accent); font-size: 0.7rem; font-weight: 600; }
+  .td-oui   { color: var(--muted); font-size: 0.7rem; }
+
+  .vendor-badge {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    padding: 0.2rem 0.6rem; border-radius: 4px;
+    font-size: 0.72rem; font-weight: 600;
+    background: rgba(0,212,255,0.08); color: var(--accent);
+    border: 1px solid rgba(0,212,255,0.15); white-space: nowrap;
+  }
+  .vendor-badge.unknown  { background: rgba(100,116,139,0.1); color: var(--muted); border-color: var(--border); }
+  .vendor-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* ── ALERTS ── */
+  .empty-state { text-align: center; padding: 4rem 2rem; color: var(--muted); }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.4; }
+  .empty-state p { font-size: 0.9rem; }
+
+  .alert {
+    padding: 0.85rem 1.2rem; border-radius: 8px;
+    font-size: 0.82rem; margin-bottom: 1rem;
+    display: flex; align-items: flex-start; gap: 0.6rem;
+    font-family: var(--mono);
+  }
+  .alert-warn  { background: rgba(255,179,0,0.1);  border: 1px solid rgba(255,179,0,0.3);  color: var(--warn); }
+  .alert-info  { background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.2);  color: var(--accent); }
+  .alert-error { background: rgba(255,71,87,0.08); border: 1px solid rgba(255,71,87,0.25); color: var(--danger); }
+
+  /* ── PAGINATION ── */
+  .pagination {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.85rem 1rem; border-top: 1px solid var(--border); font-size: 0.78rem;
+  }
+  .page-info { color: var(--muted); font-family: var(--mono); }
+  .page-btns { display: flex; gap: 0.4rem; }
+  .page-btn {
+    width: 30px; height: 30px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 5px; cursor: pointer;
+    font-size: 0.75rem; font-family: var(--mono); transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .page-btn:hover  { border-color: var(--accent); color: var(--accent); }
+  .page-btn.active { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+  .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  #csv-file-input { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">🔍</div>
+    <div>
+      <h1>LAN <span>Troubleshooter</span></h1>
+      <div style="font-size:0.75rem;color:var(--muted);margin-top:0.1rem">Network show output enricher</div>
+    </div>
+    <span class="version-badge">v4.1</span>
+
+    <div class="db-panel">
+      <div class="db-badge" id="db-badge">
+        <div class="db-dot"></div>
+        <div class="db-badge-inner">
+          <div id="db-status-text">Verificando OUI DB...</div>
+          <div class="db-progress" id="db-progress">
+            <div class="db-progress-bar" id="db-progress-bar"></div>
+          </div>
+        </div>
+      </div>
+      <div class="db-actions">
+        <button class="btn-db accent" onclick="document.getElementById('csv-file-input').click()"
+          title="Cargar CSV de OUIs desde archivo local">📂 Cargar CSV</button>
+        <button class="btn-db" id="btn-save-csv" onclick="exportDbCsv()" style="display:none"
+          title="Guardar DB actual como CSV para llevar a otras PCs">💾 Guardar CSV</button>
+        <button class="btn-db" id="btn-clear-db" onclick="clearDb()" style="display:none"
+          title="Borrar OUI DB de la memoria">🗑</button>
+      </div>
+    </div>
+  </header>
+
+  <input type="file" id="csv-file-input" accept=".csv,.txt" onchange="loadCsvFile(event)">
+
+  <!-- NO-DB BANNER -->
+  <div class="no-db-banner" id="no-db-banner">
+    <h3>⚠ Sin OUI DB cargada</h3>
+    <p>
+      Para identificar fabricantes por MAC necesitás cargar la DB de OUIs del IEEE.<br><br>
+      Descargá el CSV desde una de estas fuentes (en una PC con internet) y luego cargalo aquí:<br><br>
+      · <strong>Recomendado:</strong>
+        <a href="https://maclookup.app/downloads/csv-database" target="_blank" style="color:var(--accent)">
+          maclookup.app/downloads/csv-database</a>
+        — más completo, incluye todos los bloques OUI<br>
+      · <strong>Alternativa oficial IEEE:</strong>
+        <a href="https://standards-oui.ieee.org/oui/oui.csv" target="_blank" style="color:var(--accent)">
+          standards-oui.ieee.org/oui/oui.csv</a><br><br>
+      Sin DB igual se puede procesar — los vendors no identificados aparecerán como <em>Unknown</em>.
+    </p>
+    <div class="banner-btns">
+      <button class="btn-db accent" onclick="document.getElementById('csv-file-input').click()">📂 Cargar CSV local</button>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('auto')"><div class="tab-dot"></div> Auto-detect</button>
+    <button class="tab" onclick="switchTab('manual')"><div class="tab-dot"></div> Separado por show</button>
+  </div>
+
+  <!-- PANEL AUTO -->
+  <div class="panel active" id="panel-auto">
+    <div class="input-section">
+      <div class="input-header">
+        <span class="input-label">
+          📋 Pega aquí la salida del switch
+          <span class="detected-badge" id="auto-detected">show mac address-table detectado</span>
+        </span>
+        <button class="clear-btn" onclick="clearInput('auto-input')">✕ limpiar</button>
+      </div>
+      <textarea id="auto-input"
+        placeholder="Pega aquí cualquier salida de show del switch Cisco...
+Ejemplo:
+          Mac Address Table
+-------------------------------------------
+Vlan    Mac Address       Type        Ports
+----    -----------       --------    -----
+ 570    a4b2.3912.cd45    DYNAMIC     Gi1/0/5
+ 570    0050.56ab.1234    DYNAMIC     Gi1/0/12"
+        oninput="detectShowType(this)"></textarea>
+    </div>
+  </div>
+
+<!-- PANEL MANUAL -->
+  <div class="panel" id="panel-manual">
+    <div class="input-section">
+      <div class="input-header">
+        <span class="input-label">📋 show mac address-table</span>
+        <button class="clear-btn" onclick="clearInput('manual-mac')">✕ limpiar</button>
+      </div>
+      <textarea id="manual-mac"
+        placeholder="Pega aquí la salida de: show mac address-table
+o: show mac address-table vlan 570"></textarea>
+    </div>
+    <div class="input-section">
+      <div class="input-header">
+        <span class="input-label">📋 show arp</span>
+        <button class="clear-btn" onclick="clearInput('manual-arp')">✕ limpiar</button>
+      </div>
+      <textarea id="manual-arp"
+        placeholder="Pega aquí la salida de: show arp"></textarea>
+    </div>
+  </div>
+
+  <!-- ACTIONS -->
+  <div class="actions">
+    <button class="btn btn-primary"   onclick="processAll()">⚡ Procesar</button>
+    <button class="btn btn-success"   id="btn-export-excel" onclick="exportExcel()" disabled>📊 Exportar Excel</button>
+    <button class="btn btn-secondary" id="btn-export-csv"   onclick="exportCSV()"   disabled>📄 Exportar CSV</button>
+    <button class="btn btn-secondary" onclick="clearAll()">🗑 Limpiar todo</button>
+    <div class="stats-bar" id="stats-bar" style="display:none">
+      <span class="stat">Total: <strong id="stat-total">0</strong></span>
+      <span class="stat">VLANs: <strong id="stat-vlans">0</strong></span>
+      <span class="stat">Vendors: <strong id="stat-vendors">0</strong></span>
+      <span class="stat">Sin vendor: <strong id="stat-unknown">0</strong></span>
+      <span class="stat">Fuentes: <strong id="stat-sources">—</strong></span>
+    </div>
+  </div>
+
+  <!-- ALERTS -->
+  <div id="alerts"></div>
+
+  <!-- FILTERS -->
+  <div class="filters" id="filters" style="display:none">
+    <span class="filter-label">Filtrar:</span>
+    <input class="filter-input" id="filter-mac"      placeholder="MAC..."          oninput="applyFilters()">
+    <input class="filter-input" id="filter-ip"       placeholder="IP..."           oninput="applyFilters()">
+    <input class="filter-input" id="filter-vendor"   placeholder="Vendor..."       oninput="applyFilters()">
+    <input class="filter-input" id="filter-segment"  placeholder="VLAN/Interface..." oninput="applyFilters()">
+    <input class="filter-input" id="filter-port"     placeholder="Puerto..."       oninput="applyFilters()">
+    <button class="btn btn-secondary" onclick="clearFilters()" style="padding:0.45rem 0.85rem;font-size:0.78rem">✕ Limpiar filtros</button>
+    <span class="stat" id="filter-count" style="margin-left:auto"></span>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-wrapper" id="table-wrapper" style="display:none">
+    <div class="table-scroll">
+      <table>
+        <thead>
+		  <tr>
+            <th onclick="sortTable('mac')">MAC Address <span class="sort-icon">↕</span></th>
+            <th onclick="sortTable('vendor')">Vendor <span class="sort-icon">↕</span></th>
+            <th onclick="sortTable('ip')">IP Address <span class="sort-icon">↕</span></th>
+            <th onclick="sortTable('vlan')">VLAN <span class="sort-icon">↕</span></th>
+            <th onclick="sortTable('port')">Port <span class="sort-icon">↕</span></th>
+            <th onclick="sortTable('type')">Type <span class="sort-icon">↕</span></th>
+            <th onclick="sortTable('age')">Age <span class="sort-icon">↕</span></th>
+            <th onclick="sortTable('arpInterface')">Interface <span class="sort-icon">↕</span></th>
+            <th onclick="sortTable('oui')">OUI <span class="sort-icon">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="result-tbody"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════════════════
+//  OUI DATABASE — solo en memoria (se carga desde CSV cada sesión)
+//  No usa localStorage — sin límites de tamaño, sin complejidad
+// ══════════════════════════════════════════════════════════════════
+
+let OUI_DB   = {};   // { OUI6HEX: "Vendor Name" }
+let ouiMeta  = null; // { count, date, source }
+
+// ── INIT ──────────────────────────────────────────────────────────
+function initDb() {
+  setDbStatus('Sin OUI DB — cargá un CSV para identificar vendors', 'error');
+  showDbButtons(false);
+  document.getElementById('no-db-banner').style.display = 'block';
+}
+
+function showDbButtons(hasDb) {
+  document.getElementById('btn-save-csv').style.display  = hasDb ? '' : 'none';
+  document.getElementById('btn-clear-db').style.display  = hasDb ? '' : 'none';
+}
+
+// ── STATUS / PROGRESS UI ─────────────────────────────────────────
+function setDbStatus(text, state) {
+  const badge = document.getElementById('db-badge');
+  badge.className = `db-badge ${state}`;
+  document.getElementById('db-status-text').textContent = text;
+}
+
+function setProgress(pct) {
+  const wrap = document.getElementById('db-progress');
+  const bar  = document.getElementById('db-progress-bar');
+  if (pct === null) {
+    wrap.style.display = 'none';
+    bar.style.width = '0%';
+  } else {
+    wrap.style.display = 'block';
+    bar.style.width = Math.min(100, pct) + '%';
+  }
+}
+
+
+
+// ══════════════════════════════════════════════════════════════════
+//  CARGAR CSV DESDE ARCHIVO LOCAL
+//  Soporta formato maclookup.app y IEEE oui.csv
+// ══════════════════════════════════════════════════════════════════
+function loadCsvFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  clearAlerts();
+  setDbStatus(`Leyendo ${file.name}...`, 'warn');
+  setProgress(20);
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    setProgress(50);
+    await yieldToUI();
+    const db    = parseCsv(e.target.result);
+    const count = Object.keys(db).length;
+
+    if (count < 100) {
+      setProgress(null);
+      setDbStatus('Formato no reconocido', 'error');
+      showAlert(
+        'No se reconoció el formato del CSV. ' +
+        'Usá el archivo de <a href="https://maclookup.app/downloads/csv-database/our-list/mac-vendor-one-per-line.csv" ' +
+        'target="_blank" style="color:var(--accent)">maclookup.app</a> (mac-vendor-one-per-line.csv) o el IEEE oui.csv.',
+        'error'
+      );
+      return;
+    }
+
+    setProgress(88);
+    const saved = saveDb(db, file.name);
+    setProgress(100);
+    setTimeout(() => setProgress(null), 500);
+
+    if (saved) {
+      showAlert(`✓ OUI DB cargada desde archivo: ${count.toLocaleString()} registros.`, 'info');
+      if (allRows.length) reEnrichFromNewDb();
+    }
+  };
+  reader.onerror = () => {
+    setProgress(null);
+    setDbStatus('Error leyendo archivo', 'error');
+    showAlert('No se pudo leer el archivo.', 'error');
+  };
+  reader.readAsText(file, 'UTF-8');
+  event.target.value = '';
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PARSER CSV
+//
+//  Formato maclookup.app (mac-vendor-one-per-line.csv):
+//    Mac Prefix,Vendor Name,Private,Block Type,Last Update  ← header
+//    00166C,Samsung Electronics Co.,Ltd,false,MA-L,2016/06/11
+//    OUI en col 0, Vendor en col 1
+//
+//  Formato IEEE oui.csv:
+//    Registry,Assignment,Organization Name,Organization Address  ← header
+//    MA-L,00166C,Samsung Electronics Co.,Ltd,"..."
+//    OUI en col 1, Vendor en col 2
+//
+//  Usa parser CSV con soporte de comillas para manejar
+//  campos que contienen comas (ej: "Samsung Electronics Co.,Ltd")
+// ══════════════════════════════════════════════════════════════════
+
+// Parsea una línea CSV respetando campos entre comillas
+function parseCsvLine(line) {
+  const fields = [];
+  let cur = '';
+  let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuote && line[i+1] === '"') { cur += '"'; i++; } // comilla escapada ""
+      else inQuote = !inQuote;
+    } else if (ch === ',' && !inQuote) {
+      fields.push(cur.trim());
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  fields.push(cur.trim());
+  return fields;
+}
+
+function parseCsv(text) {
+  const db    = {};
+  const lines = text.split(/\r?\n/);
+  let isIEEE  = false;
+  let firstData = true;
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+
+    // Detectar formato por header
+    if (firstData) {
+      firstData = false;
+      const lower = t.toLowerCase();
+      if (lower.startsWith('registry,')) { isIEEE = true; continue; }
+      if (lower.startsWith('mac prefix,') || lower.startsWith('macprefix,')) continue; // saltar header maclookup
+      // Si no es header reconocido, procesar como dato
+    }
+
+    const fields = parseCsvLine(t);
+
+    if (isIEEE) {
+      // IEEE: Registry(0), Assignment/OUI(1), Organization Name(2), Address(3...)
+      if (fields.length < 3) continue;
+      const oui    = fields[1].replace(/[^0-9A-Fa-f]/g, '').toUpperCase().substring(0, 6);
+      const vendor = fields[2].trim();
+      if (oui.length === 6 && vendor && vendor.toLowerCase() !== 'organization name') db[oui] = vendor;
+    } else {
+      // maclookup.app: MacPrefix(0), VendorName(1), Private(2), BlockType(3), LastUpdate(4)
+      if (fields.length < 2) continue;
+      const oui    = fields[0].replace(/[^0-9A-Fa-f]/g, '').toUpperCase().substring(0, 6);
+      const vendor = fields[1].trim();
+      if (oui.length === 6 && vendor && vendor.toLowerCase() !== 'vendor name') db[oui] = vendor;
+    }
+  }
+  return db;
+}
+
+// ── GUARDAR DB EN MEMORIA ─────────────────────────────────────────
+function saveDb(db, source) {
+  try {
+    OUI_DB  = db;
+    const count = Object.keys(db).length;
+    const now   = new Date().toLocaleDateString('es-PE');
+    ouiMeta     = { count, date: now, source };
+    setDbStatus(`OUI DB: ${count.toLocaleString()} registros · ${now} · ${source}`, 'ok');
+    showDbButtons(true);
+    document.getElementById('no-db-banner').style.display = 'none';
+    return true;
+  } catch(e) {
+    showAlert('Error al cargar DB: ' + e.message, 'error');
+    setDbStatus('Error cargando DB', 'error');
+    return false;
+  }
+}
+
+// ── LIMPIAR DB DE MEMORIA ─────────────────────────────────────────
+function clearDb() {
+  if (!confirm('¿Limpiar la OUI DB de la memoria?\nDeberás volver a cargar el CSV para identificar vendors.')) return;
+  OUI_DB  = {};
+  ouiMeta = null;
+  setDbStatus('Sin OUI DB — cargá un CSV para identificar vendors', 'error');
+  showDbButtons(false);
+  document.getElementById('no-db-banner').style.display = 'block';
+}
+
+// ── EXPORTAR DB COMO CSV (para llevar offline) ────────────────────
+function exportDbCsv() {
+  const entries = Object.entries(OUI_DB);
+  if (!entries.length) { showAlert('No hay DB cargada para exportar.', 'warn'); return; }
+  const lines = entries.map(([oui, v]) => `${oui},${v.replace(/,/g, ' ')}`);
+  const blob  = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement('a');
+  a.href     = url;
+  a.download = `oui_db_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+//  OUI LOOKUP — síncrono contra DB local (CSV cargado)
+//  OUIs no encontrados retornan 'Unknown'
+// ══════════════════════════════════════════════════════════════════
+function getOUI(mac) {
+  const clean = mac.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+  return clean.length >= 6 ? clean.substring(0, 6) : null;
+}
+
+function lookupVendorSync(mac) {
+  const oui = getOUI(mac);
+  if (!oui) return { vendor: 'Unknown', oui: '------' };
+  const ouiFmt = oui.match(/.{2}/g).join(':');
+  const local  = OUI_DB[oui];
+  return { vendor: local || 'Unknown', oui: ouiFmt };
+}
+
+// Re-enriquecer tabla ya procesada al cargar nueva DB
+function reEnrichFromNewDb() {
+  Object.values(allRows).forEach(r => {
+    const oui = getOUI(r.mac_raw || r.mac);
+    if (!oui) return;
+    if (r.mac !== 'Incomplete') r.vendor = OUI_DB[oui] || 'Unknown';
+  });
+  filteredRows = applyCurrentFilters();
+  updateStats();
+  renderTable();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  DETECCIÓN DE TIPO DE SHOW
+//  Retorna: 'mac-table' | 'arp' | 'unknown'
+// ══════════════════════════════════════════════════════════════════
+function identifyShow(text) {
+  if (/vlan\s+mac\s+address\s+type\s+port/i.test(text)) return 'mac-table';
+  if (/[0-9a-fA-F]{4}\.[0-9a-fA-F]{4}\.[0-9a-fA-F]{4}/.test(text) &&
+      /dynamic|static/i.test(text)) return 'mac-table';
+  if (/protocol\s+address\s+age.*hardware\s+addr/i.test(text)) return 'arp';
+  if (/internet\s+\d+\.\d+\.\d+\.\d+.*arpa/i.test(text)) return 'arp';
+  return 'unknown';
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MERGE — fusiona campos nuevos en la fila existente por MAC
+//  La MAC normalizada es la clave del mapa allRows
+// ══════════════════════════════════════════════════════════════════
+function mergeRows(parsedRows) {
+  for (const row of parsedRows) {
+    const key = row.mac; // MAC normalizada como clave
+    if (allRows[key]) {
+      // La fila ya existe — agregar solo los campos que faltan
+      Object.keys(row).forEach(field => {
+        if (!allRows[key][field]) allRows[key][field] = row[field];
+      });
+    } else {
+      // Nueva MAC — crear fila
+      allRows[key] = { ...row };
+    }
+  }
+}
+
+function normalizeMac(mac) {
+  const clean = mac.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+  if (clean.length !== 12) return mac;
+  return clean.match(/.{4}/g).join('.').toLowerCase();
+}
+
+function parseShowMacTable(text) {
+  const rows  = [];
+  const lines = text.split('\n');
+  for (const line of lines) {
+    if (/^[-\s*]+$/.test(line))                           continue;
+    if (/vlan\s+mac\s+address\s+type\s+port/i.test(line)) continue;
+    if (/^total\s+mac/i.test(line))                       continue;
+    if (/^\s*$/.test(line))                               continue;
+
+    const m = line.match(
+      /^\s*\*?\s*(\d+)\s+([0-9a-fA-F]{4}\.[0-9a-fA-F]{4}\.[0-9a-fA-F]{4}|(?:[0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2})\s+(DYNAMIC|STATIC|dynamic|static|CPU|Self|SYSTEM|IGMP)\s+([\w\/\.\-]+)/
+    );
+    if (m) {
+      const mac = m[2];
+      const { vendor, oui } = lookupVendorSync(mac);
+      rows.push({
+        vlan:    m[1],
+        mac:     normalizeMac(mac),
+        mac_raw: mac,
+        type:    m[3].toUpperCase(),
+        port:    m[4],
+        oui,
+        vendor,
+      });
+    }
+  }
+  return rows;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PARSER — Cisco show arp
+//  Formato: Protocol  Address  Age(min)  Hardware Addr  Type  Interface
+//  Casos especiales:
+//    Age = '-'        → IP local del propio dispositivo
+//    MAC = Incomplete → entrada ARP sin resolver, sin lookup de vendor
+//    Interface vacía  → entrada sin interfaz (Incomplete entries)
+// ══════════════════════════════════════════════════════════════════
+function parseShowArp(text) {
+  const rows  = [];
+  const lines = text.split('\n');
+  for (const line of lines) {
+    if (/^\s*$/.test(line))                                        continue;
+    if (/protocol\s+address\s+age/i.test(line))                    continue;
+
+    const m = line.match(
+      /^\s*Internet\s+(\d+\.\d+\.\d+\.\d+)\s+([\d\-]+)\s+([0-9a-fA-F]{4}\.[0-9a-fA-F]{4}\.[0-9a-fA-F]{4}|Incomplete)\s+ARPA\s*([\w\.]*)/i
+    );
+    if (!m) continue;
+
+    const ip        = m[1];
+    const age       = m[2];           // número o '-'
+    const macRaw    = m[3];
+    const iface     = m[4] || '';     // puede estar vacía
+
+    if (macRaw.toLowerCase() === 'incomplete') {
+      // Entrada sin resolver — registrar solo con IP, sin MAC ni vendor
+      rows.push({
+        mac:          'Incomplete',
+        mac_raw:      'Incomplete',
+        oui:          '------',
+        vendor:       'Unknown',
+        ip,
+        age,
+        arpInterface: iface,
+      });
+      continue;
+    }
+
+    const mac            = normalizeMac(macRaw);
+    const { vendor, oui} = lookupVendorSync(macRaw);
+
+    rows.push({
+      mac,
+      mac_raw:      macRaw,
+      oui,
+      vendor,
+      ip,
+      age,
+      arpInterface: iface,
+    });
+  }
+  return rows;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MAIN PROCESS
+// ══════════════════════════════════════════════════════════════════
+function processAll() {
+  clearAlerts();
+  const activeTab = document.querySelector('.tabs .tab.active').textContent.trim();
+  const isAuto    = activeTab.includes('Auto');
+
+  // Construir lista de textos a procesar según el tab activo
+  const inputs = isAuto
+    ? [{ text: document.getElementById('auto-input').value }]
+    : [
+        { text: document.getElementById('manual-mac').value },
+        { text: document.getElementById('manual-arp').value },
+      ];
+
+  const textos = inputs.filter(i => i.text.trim());
+  if (!textos.length) {
+    showAlert('No hay datos para procesar. Pegá al menos una salida del switch.', 'warn');
+    return;
+  }
+
+  let totalRows = 0;
+  for (const { text } of textos) {
+    const showType = identifyShow(text);
+    let rows = [];
+    if (showType === 'mac-table') {
+      rows = parseShowMacTable(text);
+    } else if (showType === 'arp') {
+      rows = parseShowArp(text);
+    } else {
+      showAlert('Un bloque no fue reconocido — se ignoró. Soportados: show mac address-table, show arp.', 'warn');
+      continue;
+    }
+    if (!loadedSources.includes(showType)) loadedSources.push(showType);
+    mergeRows(rows);
+    totalRows += rows.length;
+  }
+
+  if (totalRows === 0) {
+    showAlert('No se encontraron entradas válidas. Verificá el formato.', 'warn');
+    return;
+  }
+
+  filteredRows = applyCurrentFilters();
+  currentPage  = 1;
+  updateStats();
+  renderTable();
+  document.getElementById('table-wrapper').style.display  = 'block';
+  document.getElementById('filters').style.display        = 'flex';
+  document.getElementById('stats-bar').style.display      = 'flex';
+  document.getElementById('btn-export-excel').disabled    = false;
+  document.getElementById('btn-export-csv').disabled      = false;
+}
+
+// ── RENDER ────────────────────────────────────────────────────────
+function renderTable() {
+  const tbody    = document.getElementById('result-tbody');
+  const start    = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = filteredRows.slice(start, start + PAGE_SIZE);
+
+  if (!pageRows.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="icon">🔍</div><p>No se encontraron resultados</p></div></td></tr>`;
+    renderPagination();
+    return;
+  }
+
+  const e = v => v || '<span style="color:var(--muted)">—</span>';
+  tbody.innerHTML = pageRows.map(r => {
+    const bc      = r.vendor === 'Unknown' ? 'unknown' : '';
+    const ageCell = r.age === '-'
+      ? `<span style="color:var(--accent);font-weight:600">local</span>`
+      : e(r.age);
+    return `<tr>
+      <td class="td-mac">${e(r.mac)}</td>
+      <td><span class="vendor-badge ${bc}"><span class="vendor-dot"></span>${r.vendor}</span></td>
+      <td style="color:#93c5fd">${e(r.ip)}</td>
+      <td class="td-vlan">${e(r.vlan)}</td>
+      <td class="td-port">${e(r.port)}</td>
+      <td class="${r.type === 'STATIC' ? 'td-type-static' : 'td-type-dynamic'}">${e(r.type)}</td>
+      <td class="td-oui">${ageCell}</td>
+      <td class="td-port">${e(r.arpInterface)}</td>
+      <td class="td-oui">${e(r.oui)}</td>
+    </tr>`;
+  }).join('');
+
+  renderPagination();
+}
+
+function renderPagination() {
+  const total      = filteredRows.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const pag        = document.getElementById('pagination');
+
+  if (totalPages <= 1) {
+    pag.innerHTML = `<span class="page-info">Mostrando ${total} de ${total} registros</span><div></div>`;
+    return;
+  }
+
+  const s   = (currentPage - 1) * PAGE_SIZE + 1;
+  const e   = Math.min(currentPage * PAGE_SIZE, total);
+  let btns  = '';
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+      btns += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+    } else if (i === currentPage - 3 || i === currentPage + 3) {
+      btns += `<span style="color:var(--muted);padding:0 4px">…</span>`;
+    }
+  }
+
+  pag.innerHTML = `
+    <span class="page-info">Mostrando ${s}–${e} de ${total} registros</span>
+    <div class="page-btns">
+      <button class="page-btn" onclick="goToPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>
+      ${btns}
+      <button class="page-btn" onclick="goToPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>›</button>
+    </div>`;
+}
+
+function goToPage(n) {
+  const tp = Math.ceil(filteredRows.length / PAGE_SIZE);
+  if (n < 1 || n > tp) return;
+  currentPage = n;
+  renderTable();
+}
+
+// ── SORT / FILTER / STATS / EXPORT ───────────────────────────────
+function sortTable(key) {
+  if (sortKey === key) sortAsc = !sortAsc; else { sortKey = key; sortAsc = true; }
+  document.querySelectorAll('th').forEach(th => th.classList.remove('sorted'));
+  event.target.closest('th').classList.add('sorted');
+  filteredRows.sort((a, b) => {
+    let va = a[key] || '', vb = b[key] || '';
+    if (key === 'vlan') { va = parseInt(va) || 0; vb = parseInt(vb) || 0; }
+    if (key === 'age')  { va = parseInt(va) || 999999; vb = parseInt(vb) || 999999; }
+    if (key === 'ip') {
+      const toNum = ip => ip ? ip.split('.').reduce((acc, o) => (acc << 8) + parseInt(o), 0) : 0;
+      va = toNum(va); vb = toNum(vb);
+    }
+    return sortAsc ? (va < vb ? -1 : va > vb ? 1 : 0) : (va > vb ? -1 : va < vb ? 1 : 0);
+  });
+  currentPage = 1;
+  renderTable();
+}
+
+function applyFilters() {
+  filteredRows = applyCurrentFilters();
+  const fc = document.getElementById('filter-count');
+  fc.innerHTML = filteredRows.length !== Object.values(allRows).length
+    ? `<strong style="color:var(--accent)">${filteredRows.length}</strong> / ${allRows.length} registros`
+    : '';
+  currentPage = 1;
+  renderTable();
+}
+
+function applyCurrentFilters() {
+  const fm = document.getElementById('filter-mac').value.toLowerCase();
+  const fi = document.getElementById('filter-ip').value.toLowerCase();
+  const fd = document.getElementById('filter-vendor').value.toLowerCase();
+  const fs = document.getElementById('filter-segment').value.toLowerCase();
+  const fp = document.getElementById('filter-port').value.toLowerCase();
+  return Object.values(allRows).filter(r =>
+    (r.mac          || '').toLowerCase().includes(fm) &&
+    (r.ip           || '').toLowerCase().includes(fi) &&
+    (r.vendor       || '').toLowerCase().includes(fd) &&
+    ((r.vlan || '') + ' ' + (r.arpInterface || '')).toLowerCase().includes(fs) &&
+    (r.port         || '').toLowerCase().includes(fp)
+  );
+}
+
+function clearFilters() {
+  ['filter-mac','filter-ip','filter-vendor','filter-segment','filter-port'].forEach(id =>
+    document.getElementById(id).value = ''
+  );
+  document.getElementById('filter-count').textContent = '';
+  filteredRows = Object.values(allRows);
+  currentPage  = 1;
+  renderTable();
+}
+
+function updateStats() {
+  const rows  = Object.values(allRows);
+  const known = rows.filter(r => r.vendor !== 'Unknown');
+  document.getElementById('stat-total').textContent   = rows.length;
+  document.getElementById('stat-vlans').textContent   = new Set(rows.map(r => r.vlan).filter(Boolean)).size;
+  document.getElementById('stat-vendors').textContent = new Set(known.map(r => r.vendor)).size;
+  document.getElementById('stat-unknown').textContent = rows.filter(r => r.vendor === 'Unknown').length;
+  const srcEl = document.getElementById('stat-sources');
+  if (srcEl) srcEl.textContent = loadedSources.length ? loadedSources.join(' + ') : '—';
+}
+
+function exportExcel() {
+  if (!Object.keys(allRows).length) return;
+  const data = filteredRows.map(r => ({
+    'MAC Address': r.mac    || '',
+    'Vendor':      r.vendor || '',
+    'IP Address':  r.ip     || '',
+    'VLAN':        r.vlan   || '',
+    'Port':        r.port   || '',
+    'Type':        r.type   || '',
+    'Age (min)':   r.age    || '',
+    'Interface':   r.arpInterface || '',
+    'OUI':         r.oui    || '',
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [{wch:18},{wch:30},{wch:15},{wch:6},{wch:14},{wch:8},{wch:8},{wch:12},{wch:10}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'LAN Data');
+  XLSX.writeFile(wb, `lan_data_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+function exportCSV() {
+  if (!Object.keys(allRows).length) return;
+  const lines = [
+    'MAC Address,Vendor,IP Address,VLAN,Port,Type,Age (min),Interface,OUI',
+    ...filteredRows.map(r =>
+      [r.mac, `"${r.vendor}"`, r.ip, r.vlan, r.port, r.type, r.age, r.arpInterface, r.oui]
+      .map(v => v || '')
+      .join(',')
+    )
+  ];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `lan_data_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────
+function switchTab(t) {
+  document.querySelectorAll('.tab').forEach((el,i) =>
+    el.classList.toggle('active', (i===0&&t==='auto')||(i===1&&t==='manual'))
+  );
+  document.getElementById('panel-auto').classList.toggle('active', t==='auto');
+  document.getElementById('panel-manual').classList.toggle('active', t==='manual');
+}
+
+function clearInput(id) {
+  document.getElementById(id).value = '';
+  if (id === 'auto-input') document.getElementById('auto-detected').style.display = 'none';
+}
+
+function clearAll() {
+  clearInput('auto-input'); clearInput('manual-mac'); clearInput('manual-arp');
+  allRows = {}; filteredRows = []; loadedSources = [];
+  document.getElementById('table-wrapper').style.display  = 'none';
+  document.getElementById('filters').style.display        = 'none';
+  document.getElementById('stats-bar').style.display      = 'none';
+  document.getElementById('btn-export-excel').disabled    = true;
+  document.getElementById('btn-export-csv').disabled      = true;
+  clearAlerts();
+}
+
+function showAlert(msg, type) {
+  const d = document.createElement('div');
+  d.className = `alert alert-${type}`;
+  d.innerHTML = `<span>${type==='error'?'✕':type==='warn'?'⚠':'ℹ'}</span><span>${msg}</span>`;
+  document.getElementById('alerts').appendChild(d);
+}
+function clearAlerts() { document.getElementById('alerts').innerHTML = ''; }
+
+function detectShowType(ta) {
+  const type = identifyShow(ta.value);
+  const b    = document.getElementById('auto-detected');
+  const labels = {
+    'mac-table': '✓ show mac address-table detectado',
+    'arp':       '✓ show arp detectado',
+  };
+  if (labels[type]) {
+    b.textContent   = labels[type];
+    b.style.display = 'inline';
+  } else {
+    b.style.display = 'none';
+  }
+}
+
+function yieldToUI() { return new Promise(r => setTimeout(r, 10)); }
+
+// ── STATE ─────────────────────────────────────────────────────────
+let allRows      = {};  // mapa MAC → fila unificada  { mac, oui, vendor, vlan, port, type, ip, age, arpInterface }
+let filteredRows = [];  // array para render/paginación — se regenera desde Object.values(allRows)
+let loadedSources = []; // registro de fuentes cargadas ej: ['mac-table', 'arp']
+let sortKey      = '';
+let sortAsc      = true;
+let currentPage  = 1;
+const PAGE_SIZE  = 100;
+
+// ── BOOT ──────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', initDb);
+</script>
+</body>
+</html>
