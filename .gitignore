@@ -1,0 +1,10 @@
+# Extensiones de IA (SpecStory y similares)
+.specstory/
+.project.json
+config.toml
+
+# Configuración propia de VS Code
+.vscode/
+
+# Archivos de estadísticas o temporales
+statistics.json
